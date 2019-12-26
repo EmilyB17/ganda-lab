@@ -20,6 +20,11 @@ What is all of this pushing and pulling? Basically: a `push` sends your staged a
 
 One final jargon to note: the merge system. Let's make an example: you own a repository that your collaborator has forked to their local machine. They have made changes to one of your R scripts in their own branch, and they want to make those changes permanent in the master branch. Your collaborator will push their changes in a `merge request`. This will send you a notification and you will be able to review their changes, Github will automatically check for any conflicts (like if you edited the code at the same time) and then you can allow the collaborator's branch to `merge` with the master branch and the changes become permanent.  
 
+**This is a very basic explanation! For more detailed instructions on setting up Git and RStudio, starting a new repository, and learning commits, see some of these tutorials below.**
+
+* [Using Git with RStudio](https://jennybc.github.io/2014-05-12-ubc/ubc-r/session03_git.html)
+* [Happy Git with R](https://happygitwithr.com)
+
 ## General best practices
 
 Version control only works properly if you use it correctly! For the best collaboration, make sure to adhere to the following:  
