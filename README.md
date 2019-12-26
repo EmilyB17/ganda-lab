@@ -34,8 +34,9 @@ For basic day-to-day use, you should be able to:
 To be able to collaborate, you should be able to follow Chapter 28 in Happy Git with R to:
 1. Fork and clone another person's respository
 2. Get upstream changes
-3. Make necessary changes and commits
-4. Submit pull request
+3. Make your own working branch
+4. Make necessary changes and commits
+5. Submit pull request
 
 ## General best practices
 
