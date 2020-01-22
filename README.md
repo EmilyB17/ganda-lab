@@ -48,3 +48,7 @@ Version control only works properly if used correctly! For the best collaboratio
 * Generally, each repository should have an `R` folder and a `data` folder, as well as a README.md file
 * Raw data should be accompanied by a metadata text file explaining the content
 * If possible, code should read in data in raw form directly from Github 
+
+
+hola 
+
