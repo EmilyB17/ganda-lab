@@ -1,0 +1,51 @@
+---
+title: "dada2 Recipe"
+author: "Emily Bean"
+date: "January 23, 2020"
+output: html_document
+---
+
+### Overview
+
+The dada2 algorithm was first published [in Nature in 2016.](https://www.nature.com/articles/nmeth.3869). It is available as a Bioconductor R package. The major difference that made dada2 stand out was how it determined taxa. Previous pipelines like QIIME clustered OTUs at 97% similarity; this number was arbitrary and thus created bias and other problems. Dada2 was the first to establish the idea of an "exact amplicon sequence variant" (ASV), a theoretically more biologically accurate way to distinguish taxonomic differences.
+It is also fast and able to run locally and through RStudio, giving it an advantage towards biologists who are not familiar with command line programming. It is intended for 16S or ITS Illumina-sequenced amplicon data.
+
+This document will give a brief overview of the main dada2 pipeline, along with an explanation of each step in the process. 
+
+From the Callahan et al. 2016 paper: 
+>*"The DADA2 R package implements the full amplicon workflow: filtering, dereplication, sample inference, chimera identification, and merging of paired-end reads."*
+
+
+### Installation
+
+The dada2 package needs to be installed through Bioconductor. *Note: the latest version requires R 3.6*
+
+```{#r}
+## Skip this chunk if dada2 is already installed
+
+# Install bioconductor
+
+install.packages("BiocManager")
+require(BiocManager)
+
+# Install dada2 through Bioconductor
+BiocManager::install("dada2", version = "3.10") # note that this needs R 3.6
+```
+
+```{r}
+
+# Once installed (or if already installed), load the package through R
+require(dada2)
+```
+
+
+
+### Filter and trim
+
+The dada2 package has its own built-in functions to filter and trim sequencing reads. This can be user-friendly as it allows you to use one software for multiple functions, instead of using several softwares for the same pipeline.
+
+#### Set recipe variables
+
+To run the **Filter and trim** recipe as one chunk, set variables in this first chunk and run the second chunk as a unit. 
+
+

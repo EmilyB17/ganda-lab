@@ -1,5 +1,13 @@
+# CHange this on Linux
+PATH="C:/Users/emily/AppData/Local/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/home/emily/"
+
+# The trunaction
+TRUNC=260
 
 ## WORKING: dada2
+
+## TO RUN TUTORIAL: LOAD RDATA
+load("C:/Users/emily/OneDrive - The Pennsylvania State University/Research/git/ganda-lab/recipe16S/data/dada2tutorial.RData")
 
 ## Install
 if (!requireNamespace("BiocManager", quietly = TRUE))
@@ -10,7 +18,7 @@ BiocManager::install("dada2", version = "3.10") # note that this needs R 3.6
 require(dada2)
 
 # path to reads
-path <- "~/Desktop/McArt/reads"
+path <- PATH
 
 #### ---- data massage and filter/trim ----
 
@@ -151,4 +159,4 @@ plot_bar(ps.top20, x="Case", fill="Family") + facet_wrap(~Case, scales="free_x")
 
 ### --- save image ----
 # for later: save .RData
-save.image("~/git/ganda-lab/recipe16S/data/dada2tutorial.RData")
+#save.image("~/git/ganda-lab/recipe16S/data/dada2tutorial.RData")
