@@ -2,19 +2,22 @@
 title: "dada2 Recipe"
 author: "Emily Bean"
 date: "January 23, 2020"
-output: html_document
+output: 
+  html_document:
+    toc: true
 ---
 
-### Overview
+### Overviewdfljs
 
-The dada2 algorithm was first published [in Nature in 2016.](https://www.nature.com/articles/nmeth.3869). It is available as a Bioconductor R package. The major difference that made dada2 stand out was how it determined taxa. Previous pipelines like QIIME clustered OTUs at 97% similarity; this number was arbitrary and thus created bias and other problems. Dada2 was the first to establish the idea of an "exact amplicon sequence variant" (ASV), a theoretically more biologically accurate way to distinguish taxonomic differences.
-It is also fast and able to run locally and through RStudio, giving it an advantage towards biologists who are not familiar with command line programming. It is intended for 16S or ITS Illumina-sequenced amplicon data.
+The dada2 algorithm was first published [in Nature in 2016](https://www.nature.com/articles/nmeth.3869). It is available as a Bioconductor R package. The major difference that made dada2 stand out was how it determined taxa. Previous pipelines like QIIME clustered OTUs at 97% similarity; this number was arbitrary and thus created bias and other problems. Dada2 was the first to establish the idea of an "exact amplicon sequence variant" (ASV), a theoretically more biologically accurate way to distinguish taxonomic differences.
+It is also fast and able to run locally and through RStudio, giving it an advantage towards biologists who are not familiar with command line programming. It is intended for 16S or ITS Illumina-sequenced amplicon data but also supports pyrosequencing with [some additional parameter changes](https://benjjneb.github.io/dada2/faq.html#can-i-use-dada2-with-my-454-or-ion-torrent-data) as well as PacBio data.
 
 This document will give a brief overview of the main dada2 pipeline, along with an explanation of each step in the process. 
 
 From the Callahan et al. 2016 paper: 
 >*"The DADA2 R package implements the full amplicon workflow: filtering, dereplication, sample inference, chimera identification, and merging of paired-end reads."*
 
+For this tutorial, we have subset 10 paired-end reads (20 files) from NCBI accession number SRP135886. It is important to note that Windows does not support multithreading in this operation, so if working from a Windows machine you may want to further subset the sample data to run faster.
 
 ### Installation
 
@@ -30,22 +33,328 @@ require(BiocManager)
 
 # Install dada2 through Bioconductor
 BiocManager::install("dada2", version = "3.10") # note that this needs R 3.6
+# these two are optional if concatenating final output to a phyloseq object
+BiocManager::install("Biostrings")
+BiocManager::install("phyloseq")
 ```
 
-```{r}
+```{#r}
 
 # Once installed (or if already installed), load the package through R
 require(dada2)
+
+# optional if concatenating final output to a phyloseq object
+require(Biostrings)
+require(phyloseq)
 ```
 
 
 
 ### Filter and trim
+**This step is not necessary to run the dada2 algorithm; if sequencing data has already been cleaned by another software, continue below**
 
-The dada2 package has its own built-in functions to filter and trim sequencing reads. This can be user-friendly as it allows you to use one software for multiple functions, instead of using several softwares for the same pipeline.
+The dada2 package has its own built-in functions to filter and trim sequencing reads. This can be user-friendly as it allows you to use one software for multiple functions, instead of using several softwares for the same pipeline. Note that this step can be repeated as many times as is necessary to properly filter and trim the data; it is helpful to use **FastQC** in tandem for a more in-depth view of the data quality.
+
+After the data is filtered and trimmed, quality plots are produced for two forward and two reverse (if applicable) samples. A dataframe is created to track the number of reads that are lost at each step; if there is a large percentage of reads lost after filtering and trimming, revisit the sequencing run parameters and filtering parameters.
 
 #### Set recipe variables
 
-To run the **Filter and trim** recipe as one chunk, set variables in this first chunk and run the second chunk as a unit. 
+To run the **Filter and trim** recipe as one chunk, set variables in this first chunk and run the second chunk as a unit. Note that dada2 is originally designed to handle paired-end reads but can also handle single-end reads. See `?filterAndTrim` for more details.
+
+
+```{#r}
+## set all variables for downstream chunks
+
+# Boolean: paired-end (TRUE) or singled-end (FALSE) reads
+PAIRED = TRUE
+
+# path to directory that contains fastq files
+PATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialreads"
+
+# paired end characterization; most Illumina files are sample names + "_R1_001.fastq" for forward reads
+# however, sequences downloaded from NCBI have patterns: "_1.fastq" for forward and "_2.fastq" for reverse
+# if single-end, only specify PATTERNF
+PATTERNF = "_1.fastq"
+PATTERNR = "_2.fastq"
+
+# Quality cut: "Truncate reads at the first instance of a quality score less than or equal to truncQ"
+TRUNCQ = 2
+
+# Length cut: "Truncate reads after `trunclen` bases; reads shorter than this are discarded"
+# NOTE: if paired-end, need two values (one for forward and one for reverse)
+TRUNCLEN = c(240, 220)
+
+# Head trim: "Number of nucleotides to remove from the start of each read"
+TRIMLEFT = 10
+
+# Tail trim: "Number of nucleotides to remove from the end of each read"
+TRIMRIGHT = 0
+
+# Minimum length: "Remove reads with length less than minLen" -- this happens AFTER other trims/truncations
+MINLEN = 150
+
+# Maxmimum N: "After truncation, sequences with more than `maxN` are discarded"
+MAXN = 0
+
+# Minimum quality: "After truncation, reads contain a quality score less than `minQ` are discarded"
+MINQ = 0
+
+```
+
+#### Perform filtering and trimming
+```{#r}
+
+# make sure the file path points to the listed files
+if(length(list.files(PATH)) == 0) {
+  stop("Path does not point to fastq files")
+}
+
+
+if(PAIRED == TRUE) {
+  # get list of files
+  forward <- sort(list.files(PATH, pattern = PATTERNF, full.names = TRUE))
+  reverse <- sort(list.files(PATH, pattern = PATTERNR, full.names = TRUE))
+  
+  # check to make sure that the lengths of both files are the same
+  if(length(forward) != length(reverse)) {
+    stop("Forward and reverse paths do not match; are the samples uneven?")
+  }
+  
+  # get sample names
+  sample.names <- sapply(strsplit(basename(forward), PATTERNF), `[`, 1)
+  
+  # create subdirectory for filtered files
+  filtForward <- file.path(PATH, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+  filtReverse <- file.path(PATH, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+  
+  # filter and trim
+  cleaned <- filterAndTrim(fwd = forward, rev = reverse,
+                       filt = filtForward, filt.rev = filtReverse,
+                       # add parameters that the user selected in previous chunk
+                       truncQ = TRUNCQ,
+                       truncLen = TRUNCLEN,
+                       trimLeft = TRIMLEFT,
+                       trimRight = TRIMRIGHT,
+                       maxN = MAXN,
+                       minLen = MINLEN,
+                       minQ = MINQ
+  )
+  
+  # plot quality profile of forward and reverse samples post-filter/trim
+  plotQualityProfile(filtForward[1:2])
+  plotQualityProfile(filtReverse[1:2])
+
+} else { # continue on to single-read workflow 
+  
+  # list samples
+  forward <- sort(list.files(PATH, pattern = PATTERNF, full.names = TRUE))
+  
+  # get sample names
+  sample.names <- sapply(strsplit(basename(forward), PATTERNF), `[`, 1)
+  
+  # create subdirectory for filtered files
+  filtForward <- file.path(PATH, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+  
+  # filter and trim
+  cleaned <- filterAndTrim(fwd = forward, filt = filtForward, 
+                       # add parameters that the user selected in previous chunk
+                       truncQ = TRUNCQ,
+                       truncLen = TRUNCLEN,
+                       trimLeft = TRIMLEFT,
+                       trimRight = TRIMRIGHT,
+                       maxN = MAXN,
+                       minLen = MINLEN,
+                       minQ = MINQ)
+  
+  # plot quality profile post-filter/trim
+  plotQualityProfile(filtForward[1:2])
+}
+
+```
+
+### dada2 Core Algorithms
+
+The next two chunks assume that the sequencing data is cleaned, trimmed, and filtered to your standards (which should be high!). 
+
+#### Set Recipe Variables
+
+```{#r}
+# set recipe variables for dada2
+
+# Boolen: is data paired-end (TRUE) or single-end (FALSE)
+PAIRED = TRUE
+
+# path to filtered and cleaned reads
+CLEANEDPATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialreads/filtered"
+
+# pattern that specifies which reads are forward or reverse
+# if single-read pairs, only specific forward 
+PATTERNF = "_F_filt.fastq.gz"
+PATTERNR = "_R_filt.fastq.gz"
+
+# path to taxonomy database
+DBPATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialdbs/silva_nr_v132_train_set.fa"
+
+# path to species database
+SPECIESPATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialdbs/silva_species_assignment_v132.fa"
+
+# Boolean: perform final step to concatenate output objects to a phyloseq object?
+PHYLO = TRUE
+```
+
+#### Perform core dada2 algorithms
+
+There are multiple steps to this process, allowing for some user input at each step. There are two main data outputs: `seqtab.nochim`, the ASV table, and `taxa`, the table of assigned taxonomy for each ASV. The final (optional) step concatenates these neatly to a phyloseq object that the user can add sample metadata to and complete further analysis on.
+
+`err`: Estimates the error rates by "alternating between sample inference and error rate estimation until convergence".
+
+`dada`: "Removes all sequencing errors to reveal the members of the sequenced community". This is a de-noising step that removes Illumina errors.
+* The object returned by `dada` is a `dada-class` containing diagnostic information about the quality of each sample's denoising. See `?help(dada-class)`
+* The basic tutorial workflow does *not* perform a dereplicating step and instead the filtered fastq files are input to the `dada` step.  
+
+
+`mergePairs`: merges each denoised pair of forward and reverse reads
+* Reads are rejected if there is not enough overlap or too many mismatches - these parameters can be manipulated to make merging more or less stringent.
+
+`makeSequenceTable`: constructs an ASV table (similar to an OTU table) from the list of samples.
+
+`removeBimeraDenovo`: removes chimeras from two identification methods: identifying across both pooled sequences and consensus across samples. 
+
+`assignTaxonomy`
+
+`addSpecies`: "...assign genus-species binomials to input sequences by exact matching against a reference fasta". These are merged into the taxonomic tables as an additional column, and species identification that match the input table and binomial classification are included in the return table.
+
+
+```{#r}
+# make sure the file path points to the listed files
+if(length(list.files(CLEANEDPATH)) == 0) {
+  stop("Path does not point to fastq files")
+}
+
+# perform dada2 algorithms
+if(PAIRED == TRUE) {
+  
+  # get forward and reverse reads
+  forward <- sort(list.files(CLEANEDPATH, pattern = PATTERNF, full.names = TRUE))
+  reverse <- sort(list.files(CLEANEDPATH, pattern = PATTERNR, full.names = TRUE))
+  
+  # check to make sure that the lengths of both files are the same
+  if(length(forward) != length(reverse)) {
+    stop("Forward and reverse paths do not match; are the samples uneven?")
+  }
+  
+  # perform error learning
+  errF <- learnErrors(forward, multithread = TRUE)
+  errR <- learnErrors(reverse, multithread = TRUE)
+  
+  # perform dada2
+  dadaForward <- dada(forward, err = errF, multithread = TRUE)
+  dadaReverse <- dada(reverse, err = errR, multithread = TRUE)
+  
+  # merge paired reads
+  mergers <- mergePairs(dadaF = dadaForward,
+                        derepF = forward,
+                        dadaR = dadaReverse,
+                        derepR = reverse,
+                        verbose = TRUE)
+  
+  # construct sequence table of ASVs
+  seqtab <- makeSequenceTable(mergers)
+  
+  # remove chimeras
+  seqtab.nochim <- removeBimeraDenovo(seqtab, 
+                                      method = "consensus",
+                                      multithread = TRUE,
+                                      verbose = TRUE)
+  
+  # print the percentage of chimeras
+  cat("Frequency of non-chimeric sequences when accounted for abundance:", round(sum(seqtab.nochim)/sum(seqtab), 3))
+  
+  # assign taxonomy
+  taxa <- assignTaxonomy(seqtab.nochim, DBPATH, multithread = TRUE)
+  
+  # add species assignment
+  taxa <- addSpecies(taxa, SPECIESPATH)
+  
+  # final optional step: concatenate output to a phyloseq object
+  if(PHYLO == TRUE) {
+    
+    # get sample names
+    samples.out <- rownames(seqtab.nochim)
+    sample.names <- sapply(strsplit(samples.out, PATTERNF), `[`, 1)
+    # construct phyloseq object
+    ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows = FALSE),
+                   tax_table(taxa))
+    
+    # make phyloseq object more readable by changing DNA strings to ASV names
+    dna <- Biostrings::DNAStringSet(taxa_names(ps))
+    names(dna) <- taxa_names(ps)
+    ps <- merge_phyloseq(ps, dna)
+    taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+    
+  }
+
+  
+} else { # perform the same workflow for single-paired reads
+  
+  # get reads
+  forward <- sort(list.files(CLEANEDPATH, pattern = PATTERNF, full.names = TRUE))
+  
+  # perform error learning
+  errF <- learnErrors(forward, multithread = TRUE)
+  
+  # perform dada2
+  dadaForward <- dada(forward, err = errF, multithread = TRUE)
+  
+  # there is no merging!!
+  
+  # construct sequence table of ASVs
+  seqtab <- makeSequenceTable(dadaForward)
+  
+  # remove chimeras
+  seqtab.nochim <- removeBimeraDenovo(seqtab, 
+                                      method = "consensus",
+                                      multithread = TRUE,
+                                      verbose = TRUE)
+  # print the percentage of chimeras
+  cat("Frequency of non-chimeric sequences when accounted for abundance:", round(sum(seqtab.nochim)/sum(seqtab), 3))
+  
+  # assign taxonomy
+  taxa <- assignTaxonomy(seqtab.nochim, DBPATH, multithread = TRUE)
+  
+  # add species assignment
+  taxa <- addSpecies(taxa, SPECIESPATH)
+  
+  # final optional step: concatenate output to a phyloseq object
+  if(PHYLO == TRUE) {
+    
+    # get sample names
+    samples.out <- rownames(seqtab.nochim)
+    sample.names <- sapply(strsplit(samples.out, PATTERNF), `[`, 1)
+    # construct phyloseq object
+    ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows = FALSE),
+                   tax_table(taxa))
+    
+    # make phyloseq object more readable by changing DNA strings to ASV names
+    dna <- Biostrings::DNAStringSet(taxa_names(ps))
+    names(dna) <- taxa_names(ps)
+    ps <- merge_phyloseq(ps, dna)
+    taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+    
+  }
+}
+
+```
+
+### References
+
+dada2 tutorial: https://benjjneb.github.io/dada2/
+
+Callahan et al 2016: https://www.nature.com/articles/nmeth.3869
+
+Bioconductor dada2 manual: https://www.bioconductor.org/packages/release/bioc/manuals/dada2/man/dada2.pdf
+
+SILVA databases: https://benjjneb.github.io/dada2/training.html (Silva version 132; training set for `assignTaxonomy` and species set for `addSpecies`)
+
 
 
