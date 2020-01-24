@@ -7,7 +7,7 @@ output:
     toc: true
 ---
 
-### Overviewdfljs
+### Overview
 
 The dada2 algorithm was first published [in Nature in 2016](https://www.nature.com/articles/nmeth.3869). It is available as a Bioconductor R package. The major difference that made dada2 stand out was how it determined taxa. Previous pipelines like QIIME clustered OTUs at 97% similarity; this number was arbitrary and thus created bias and other problems. Dada2 was the first to establish the idea of an "exact amplicon sequence variant" (ASV), a theoretically more biologically accurate way to distinguish taxonomic differences.
 It is also fast and able to run locally and through RStudio, giving it an advantage towards biologists who are not familiar with command line programming. It is intended for 16S or ITS Illumina-sequenced amplicon data but also supports pyrosequencing with [some additional parameter changes](https://benjjneb.github.io/dada2/faq.html#can-i-use-dada2-with-my-454-or-ion-torrent-data) as well as PacBio data.
@@ -15,7 +15,7 @@ It is also fast and able to run locally and through RStudio, giving it an advant
 This document will give a brief overview of the main dada2 pipeline, along with an explanation of each step in the process. 
 
 From the Callahan et al. 2016 paper: 
->*"The DADA2 R package implements the full amplicon workflow: filtering, dereplication, sample inference, chimera identification, and merging of paired-end reads."*
+>*"The DADA2 R package implements the full amplicon workflow: filtering, dereplication,  sample inference, chimera identification, and merging of paired-end reads."*
 
 For this tutorial, we have subset 10 paired-end reads (20 files) from NCBI accession number SRP135886. It is important to note that Windows does not support multithreading in this operation, so if working from a Windows machine you may want to further subset the sample data to run faster.
 
@@ -206,9 +206,11 @@ PHYLO = TRUE
 
 There are multiple steps to this process, allowing for some user input at each step. There are two main data outputs: `seqtab.nochim`, the ASV table, and `taxa`, the table of assigned taxonomy for each ASV. The final (optional) step concatenates these neatly to a phyloseq object that the user can add sample metadata to and complete further analysis on.
 
-`err`: Estimates the error rates by "alternating between sample inference and error rate estimation until convergence".
+`err`: Estimates the error rates by "alternating between sample inference and error rate estimation until convergence". Discovers model parameters from the data with unsupervised learning in which "the sample inference is alternated with parameter estimation until both are jointly consistent" - use with a subset of data
 
-`dada`: "Removes all sequencing errors to reveal the members of the sequenced community". This is a de-noising step that removes Illumina errors.
+`dada`: "Removes all sequencing errors to reveal the members of the sequenced community". This is a de-noising step that removes Illumina errors. Basically, `dada` uses the `err` object to find Illumina or PCR sequencing errors, removes those, and then classifies the rest of the community similar to OTU clustering but by biological similarity instead. The output is a sequence x sample table similar to a traditional OTU table. `dada` requires multiple reads in each sample, since the core algorithm makes the assumption that biological sequences are more likely to be repeatedly observed than error sequences. It assumes that once the error sequences are removed, what is left is the actual DNA sequence of the organism. *Note that this makes dada2 less sensitive to rare variants, since they are more likely to be considered an error sequence*. The function creates a statistical test to test whether a sequence has been seen too many times to have been created by sequencing errors. It is a "parametric error model of substitutions", which means the accuracy of the error model (created by `err`) affects the sample inference.
+* All comparisons depend on pairwise alignments; kmer-distance screen and banded Needleman-Wunsch alignment
+* This is similar to what used to be used for 454 pyrosequencing, and is called a "denoising" process.
 * The object returned by `dada` is a `dada-class` containing diagnostic information about the quality of each sample's denoising. See `?help(dada-class)`
 * The basic tutorial workflow does *not* perform a dereplicating step and instead the filtered fastq files are input to the `dada` step.  
 
@@ -220,7 +222,7 @@ There are multiple steps to this process, allowing for some user input at each s
 
 `removeBimeraDenovo`: removes chimeras from two identification methods: identifying across both pooled sequences and consensus across samples. 
 
-`assignTaxonomy`
+`assignTaxonomy`: Uses naive Bayesian classifer to assign taxonomy based on a reference training set fasta of classifed sequences.
 
 `addSpecies`: "...assign genus-species binomials to input sequences by exact matching against a reference fasta". These are merged into the taxonomic tables as an additional column, and species identification that match the input table and binomial classification are included in the return table.
 
@@ -355,6 +357,12 @@ Callahan et al 2016: https://www.nature.com/articles/nmeth.3869
 Bioconductor dada2 manual: https://www.bioconductor.org/packages/release/bioc/manuals/dada2/man/dada2.pdf
 
 SILVA databases: https://benjjneb.github.io/dada2/training.html (Silva version 132; training set for `assignTaxonomy` and species set for `addSpecies`)
+
+dada2 original publication: https://f1000research.com/articles/5-1492
+
+ASV vs OTU publication: https://www.nature.com/articles/ismej2017119
+
+source code: https://github.com/benjjneb/dada2/tree/master/R
 
 
 
