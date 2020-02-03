@@ -14,7 +14,7 @@ require(tidyverse)
 require(phyloseq)
 require(pairwiseAdonis)
 # load locally for now since the GitHub file is huge
-load("C:/Users/emily/OneDrive - University of Wyoming/Thesis Work/grazing_soil_microbes/data/allBetaDiv_PSobjects_UNITE.RData")
+load("demoPhyloseq.RData")
 ```
 
 
