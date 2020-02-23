@@ -52,6 +52,10 @@ myPCA <- function(dat) # data for PCA (continuous variables only)
 
 }
 
+# SECOND FUNCTION: create plots with grouping variables
+# the first plot is the PCA with 95% confidence intervals
+# the second plot is a biplot
+
 plotPCAs <- function(dat, # data to perform PCA
                      grouping, # grouping variable (independent variable)
                      groupname)  { # the group name as it should appear on a legend title
