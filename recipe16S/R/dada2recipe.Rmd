@@ -1,23 +1,24 @@
 ---
-title: "dada2 Recipe"
+title: "Digging into dada2"
 author: "Emily Bean"
-date: "January 23, 2020"
+date: Sys.date()
 output: 
-  html_document:
-    toc: true
+  rmarkdown::github_document
 ---
 
 ### Overview
 
-The dada2 algorithm was first published [in Nature in 2016](https://www.nature.com/articles/nmeth.3869). It is available as a Bioconductor R package. The major difference that made dada2 stand out was how it determined taxa. Previous pipelines like QIIME clustered OTUs at 97% similarity; this number was arbitrary and thus created bias and other problems. Dada2 was the first to establish the idea of an "exact amplicon sequence variant" (ASV), a theoretically more biologically accurate way to distinguish taxonomic differences.
-It is also fast and able to run locally and through RStudio, giving it an advantage towards biologists who are not familiar with command line programming. It is intended for 16S or ITS Illumina-sequenced amplicon data but also supports pyrosequencing with [some additional parameter changes](https://benjjneb.github.io/dada2/faq.html#can-i-use-dada2-with-my-454-or-ion-torrent-data) as well as PacBio data.
+The dada2 algorithm was published [in Nature in 2016](https://www.nature.com/articles/nmeth.3869). It is available as a Bioconductor R package. 
+
+Dada2 is able to run locally (does not require supercomputing abilities) and through RStudio, making it easily accessible to biologists who are not familiar with command line programming. It is intended for 16S or ITS Illumina-sequenced amplicon data but also supports pyrosequencing with [some additional parameter changes](https://benjjneb.github.io/dada2/faq.html#can-i-use-dada2-with-my-454-or-ion-torrent-data) as well as PacBio data.
 
 This document will give a brief overview of the main dada2 pipeline, along with an explanation of each step in the process. 
 
 From the Callahan et al. 2016 paper: 
 >*"The DADA2 R package implements the full amplicon workflow: filtering, dereplication,  sample inference, chimera identification, and merging of paired-end reads."*
 
-For this tutorial, we have subset 10 paired-end reads (20 files) from NCBI accession number SRP135886. It is important to note that Windows does not support multithreading in this operation, so if working from a Windows machine you may want to further subset the sample data to run faster.
+For this tutorial, we have downloaded all reads from 10 250x250 bp paired-end fastq files (20 files total) from NCBI accession number SRP135886 (code downloaded from: https://www.bioinformatics.recipes/recipe/view/recipe-230-095/#code). 
+It is important to note that Windows does not support multithreading in this operation, so if working from a Windows machine you may want to further subset the sample data to run faster. 
 
 ### Installation
 
@@ -33,174 +34,150 @@ require(BiocManager)
 
 # Install dada2 through Bioconductor
 BiocManager::install("dada2", version = "3.10") # note that this needs R 3.6
-# these two are optional if concatenating final output to a phyloseq object
-BiocManager::install("Biostrings")
-BiocManager::install("phyloseq")
 ```
 
 ```{#r}
-
 # Once installed (or if already installed), load the package through R
 require(dada2)
-
-# optional if concatenating final output to a phyloseq object
-require(Biostrings)
-require(phyloseq)
 ```
 
+### Filter and Trim
 
+Dada2 supports filtering and trimming fastq files within R, but this is an optional step. 
+Important note: downstream `dada2` functions do not accept **any** ambiguous bases; these must all be removed during trimming/filtering.
 
-### Filter and trim
-**This step is not necessary to run the dada2 algorithm; if sequencing data has already been cleaned by another software, continue below**
+The code chunk below reads fastq files from an absolute path. There is some error handling including to ensure that the files are read in correctly and sorted in order; `dada2` assumes that the forward and reverse files are ordered. 
 
-The dada2 package has its own built-in functions to filter and trim sequencing reads. This can be user-friendly as it allows you to use one software for multiple functions, instead of using several softwares for the same pipeline. Note that this step can be repeated as many times as is necessary to properly filter and trim the data; it is helpful to use **FastQC** in tandem for a more in-depth view of the data quality.
-
-After the data is filtered and trimmed, quality plots are produced for two forward and two reverse (if applicable) samples. A dataframe is created to track the number of reads that are lost at each step; if there is a large percentage of reads lost after filtering and trimming, revisit the sequencing run parameters and filtering parameters.
-
-#### Set recipe variables
-
-To run the **Filter and trim** recipe as one chunk, set variables in this first chunk and run the second chunk as a unit. Note that dada2 is originally designed to handle paired-end reads but can also handle single-end reads. See `?filterAndTrim` for more details.
-
-
-```{#r}
-## set all variables for downstream chunks
-
-# Boolean: paired-end (TRUE) or singled-end (FALSE) reads
-PAIRED = TRUE
+```{r}
+## ---- setVariables ----
 
 # path to directory that contains fastq files
-PATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialreads"
+PATH = "~/dada2demo/"
 
-# paired end characterization; most Illumina files are sample names + "_R1_001.fastq" for forward reads
-# however, sequences downloaded from NCBI have patterns: "_1.fastq" for forward and "_2.fastq" for reverse
-# if single-end, only specify PATTERNF
+# desired SRA numbers
+SRA = list.files(PATH, pattern = ".fastq")
+
+# paired end characterization; sequences downloaded from NCBI have patterns: "_1.fastq" for forward and "_2.fastq" for reverse
 PATTERNF = "_1.fastq"
 PATTERNR = "_2.fastq"
 
 # Quality cut: "Truncate reads at the first instance of a quality score less than or equal to truncQ"
-TRUNCQ = 2
+TRUNCQ = 0
 
 # Length cut: "Truncate reads after `trunclen` bases; reads shorter than this are discarded"
 # NOTE: if paired-end, need two values (one for forward and one for reverse)
-TRUNCLEN = c(240, 220)
+TRUNCLEN = c(0, 0)
 
 # Head trim: "Number of nucleotides to remove from the start of each read"
-TRIMLEFT = 10
+TRIMLEFT = 0
 
 # Tail trim: "Number of nucleotides to remove from the end of each read"
 TRIMRIGHT = 0
 
 # Minimum length: "Remove reads with length less than minLen" -- this happens AFTER other trims/truncations
-MINLEN = 150
+MINLEN = 100
 
 # Maxmimum N: "After truncation, sequences with more than `maxN` are discarded"
+# NOTE: dada2 does not allow Ns
 MAXN = 0
 
 # Minimum quality: "After truncation, reads contain a quality score less than `minQ` are discarded"
 MINQ = 0
 
-```
+## ---- getFiles----
 
-#### Perform filtering and trimming
-```{#r}
-
-# make sure the file path points to the listed files
-if(length(list.files(PATH)) == 0) {
-  stop("Path does not point to fastq files")
+# are files already split? 
+if(any(grepl(PATTERNF, SRA))) {
+  
+  # find forward and reverse files
+  fwd <- SRA[grep(PATTERNF, SRA)]
+  rev <- SRA[grep(PATTERNR, SRA)]
+  
+  # get file paths
+  fwdFiles <- paste0(PATH, fwd)
+  revFiles <- paste0(PATH, rev)
+} else {  # if files are not split, get path
+  
+  # get forward files
+  fwdFiles <- paste0(PATH, SRA, PATTERNF)
+  # get reverse files
+  revFiles <- paste0(PATH, SRA, PATTERNR)
+  
 }
 
-
-if(PAIRED == TRUE) {
-  # get list of files
-  forward <- sort(list.files(PATH, pattern = PATTERNF, full.names = TRUE))
-  reverse <- sort(list.files(PATH, pattern = PATTERNR, full.names = TRUE))
+# error catch
+if(length(file(fwdFiles[1])) == 0) {
   
-  # check to make sure that the lengths of both files are the same
-  if(length(forward) != length(reverse)) {
-    stop("Forward and reverse paths do not match; are the samples uneven?")
-  }
+  stop("cannot read forward file path")
   
-  # get sample names
-  sample.names <- sapply(strsplit(basename(forward), PATTERNF), `[`, 1)
+} 
+# error catch
+if(length(file(revFiles[1])) == 0) {
   
-  # create subdirectory for filtered files
-  filtForward <- file.path(PATH, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
-  filtReverse <- file.path(PATH, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
-  
-  # filter and trim
-  cleaned <- filterAndTrim(fwd = forward, rev = reverse,
-                       filt = filtForward, filt.rev = filtReverse,
-                       # add parameters that the user selected in previous chunk
-                       truncQ = TRUNCQ,
-                       truncLen = TRUNCLEN,
-                       trimLeft = TRIMLEFT,
-                       trimRight = TRIMRIGHT,
-                       maxN = MAXN,
-                       minLen = MINLEN,
-                       minQ = MINQ
-  )
-  
-  # plot quality profile of forward and reverse samples post-filter/trim
-  plotQualityProfile(filtForward[1:2])
-  plotQualityProfile(filtReverse[1:2])
-
-} else { # continue on to single-read workflow 
-  
-  # list samples
-  forward <- sort(list.files(PATH, pattern = PATTERNF, full.names = TRUE))
-  
-  # get sample names
-  sample.names <- sapply(strsplit(basename(forward), PATTERNF), `[`, 1)
-  
-  # create subdirectory for filtered files
-  filtForward <- file.path(PATH, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
-  
-  # filter and trim
-  cleaned <- filterAndTrim(fwd = forward, filt = filtForward, 
-                       # add parameters that the user selected in previous chunk
-                       truncQ = TRUNCQ,
-                       truncLen = TRUNCLEN,
-                       trimLeft = TRIMLEFT,
-                       trimRight = TRIMRIGHT,
-                       maxN = MAXN,
-                       minLen = MINLEN,
-                       minQ = MINQ)
-  
-  # plot quality profile post-filter/trim
-  plotQualityProfile(filtForward[1:2])
+  stop("cannot read reverse file path")
 }
 
+# check to make sure that the lengths of both files are the same
+if(length(fwdFiles) != length(revFiles)) {
+  
+  stop("There is an unequal number of forward and reverse files")
+}
+
+# get sample names
+fwdNames <- sapply(strsplit(basename(fwdFiles), PATTERNF), `[`, 1)
+revNames <- sapply(strsplit(basename(revFiles), PATTERNR), `[`, 1)
+
+# error catch if unordered
+if(any(!fwdNames %in% revNames)) {
+  
+  stop("forward and reverse files are out of order")
+  
+}
 ```
+
+In the next code chunk, we perform the filtering and trimming step. This creates a subdirectory filled with the filtered files, and creates a dataframe that counts the reads that were removed during trimming. 
+
+When paired reads are input, the function performs filtering on the forward and reverse reads independently, and only passes the reads that pass both. The `dada2` package has several functions that can filter and trim reads (see `?fastqFilter` and `fastqPairedFilter`), but the `filterAndTrim` function supports multithreading (on MacOS only).
+
+If the `filterAndTrim` function is saved to a variable, the output is a matrix of input reads and output reads. This allows us to track the reads that we lose along the pipeline. For this demonstration, our filter and trimming parameters were very loose and we lost on average about 2% of the reads during this step.
+
+```{r}
+### ---- filterAndTrim ----
+
+# create subdirectory for filtered files
+filtForward <- file.path("./filtered", paste0(fwdNames, "_F_filt.fastq.gz"))
+filtReverse <- file.path("./filtered", paste0(revNames, "_R_filt.fastq.gz"))
+
+
+# filter and trim
+cleaned <- filterAndTrim(fwd = fwdFiles, rev = revFiles,
+                         filt = filtForward, filt.rev = filtReverse,
+                         # add parameters that the user selected in previous chunk
+                         truncQ = TRUNCQ,
+                         truncLen = TRUNCLEN,
+                         trimLeft = TRIMLEFT,
+                         trimRight = TRIMRIGHT,
+                         maxN = MAXN,
+                         minLen = MINLEN,
+                         minQ = MINQ
+)
+
+# track how many reads were removed during filtering process
+head(cleaned)
+
+# add a column to the tracked reads dataframe to see percentage of reads lost
+track.reads <- as.data.frame(cleaned)
+track.reads$percent.lost <- round((track.reads$reads.in - track.reads$reads.out) / track.reads$reads.in * 100, 2)
+
+# view the dataframe
+head(track.reads)
+
+```
+
 
 ### dada2 Core Algorithms
 
 The next two chunks assume that the sequencing data is cleaned, trimmed, and filtered to your standards (which should be high!). 
-
-#### Set Recipe Variables
-
-```{#r}
-# set recipe variables for dada2
-
-# Boolen: is data paired-end (TRUE) or single-end (FALSE)
-PAIRED = TRUE
-
-# path to filtered and cleaned reads
-CLEANEDPATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialreads/filtered"
-
-# pattern that specifies which reads are forward or reverse
-# if single-read pairs, only specific forward 
-PATTERNF = "_F_filt.fastq.gz"
-PATTERNR = "_R_filt.fastq.gz"
-
-# path to taxonomy database
-DBPATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialdbs/silva_nr_v132_train_set.fa"
-
-# path to species database
-SPECIESPATH = "/Users/emily/ganda-lab/recipe16S/data/tutorialdbs/silva_species_assignment_v132.fa"
-
-# Boolean: perform final step to concatenate output objects to a phyloseq object?
-PHYLO = TRUE
-```
 
 #### Perform core dada2 algorithms
 
