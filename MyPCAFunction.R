@@ -44,8 +44,7 @@ myPCA <- function(dat) # data for PCA (continuous variables only)
                repel = TRUE, select.var = list(contrib = 10))
   
   
-  return(list(pca,
-              scree, 
+  return(list(scree, 
               cos2plot, 
               cos2cor,
               contplot,
