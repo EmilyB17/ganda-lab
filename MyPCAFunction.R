@@ -53,9 +53,14 @@ myPCA <- function(dat) # data for PCA (continuous variables only)
 
 }
 
-plotPCAs <- function(pca, # PCA object from myPCA
+plotPCAs <- function(dat, # data to perform PCA
                      grouping, # grouping variable (independent variable)
-                     groupname)  { # the group name as it should appear on a legend title 
+                     groupname)  { # the group name as it should appear on a legend title
+  
+  # make the PCA
+  pca <- PCA(dat, 
+             scale.unit = TRUE, # scale everything to equal variance
+             graph = FALSE) # don't print a graph
 
   
   ## make grouping plot
