@@ -5,9 +5,7 @@
 # creates diagnostic plots of variable cos2 and contributions, and 
 # finally makes a PCA and biplot with grouping variables and correlations
 
-myPCA <- function(dat, # data for PCA (continuous variables only)
-                  grouping, # grouping variable (independent variable)
-                  groupname) # the group name as it should appear on a legend title
+myPCA <- function(dat) # data for PCA (continuous variables only)
   {
   
   # make the PCA
@@ -45,42 +43,49 @@ myPCA <- function(dat, # data for PCA (continuous variables only)
                gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
                repel = TRUE, select.var = list(contrib = 10))
   
+  
+  return(list(pca,
+              scree, 
+              cos2plot, 
+              cos2cor,
+              contplot,
+              contcor))
+
+}
+
+plotPCAs <- function(pca, # PCA object from myPCA
+                     grouping, # grouping variable (independent variable)
+                     groupname)  { # the group name as it should appear on a legend title 
+
+  
   ## make grouping plot
   ## color by grouping variables
   groups <- fviz_pca_ind(pca,
-               geom.ind = "point",
-               col.ind = grouping,
-               addEllipses = TRUE,
-               legend.title = groupname,
-               mean.point = FALSE,
-               ellipse.type = "confidence",
-               ellipse.level = 0.95,
-               title = "Principal Component Analysis",
-               subtitle = "Aqueous metabolites"
+                         geom.ind = "point",
+                         col.ind = grouping,
+                         addEllipses = TRUE,
+                         legend.title = groupname,
+                         mean.point = FALSE,
+                         ellipse.type = "confidence",
+                         ellipse.level = 0.95,
+                         title = "Principal Component Analysis",
+                         subtitle = "Aqueous metabolites"
   )
   
   ## make grouping biplot
   biplot <- fviz_pca_biplot(pca,
-                  col.in = grouping,
-                  legend.title = groupname,
-                  geom.ind = "point",
-                  addEllipses = TRUE,
-                  select.var = list(contrib = 10),
-                  col.var = "black",
-                  repel = TRUE,
-                  # x and y axis labels with variance
-                  xlab = paste0("PCA1 (", round(pca$eig[1, 2], 0), "%)"),
-                  ylab = paste0("PCA2 (", round(pca$eig[2, 2], 0), "%)"),
-                  title = "Principal Components Analysis Biplot")
+                            col.in = grouping,
+                            legend.title = groupname,
+                            geom.ind = "point",
+                            addEllipses = TRUE,
+                            select.var = list(contrib = 10),
+                            col.var = "black",
+                            repel = TRUE,
+                            # x and y axis labels with variance
+                            xlab = paste0("PCA1 (", round(pca$eig[1, 2], 0), "%)"),
+                            ylab = paste0("PCA2 (", round(pca$eig[2, 2], 0), "%)"),
+                            title = "Principal Components Analysis Biplot")
   
-  return(list(scree, 
-              cos2plot, 
-              cos2cor,
-              contplot,
-              contcor,
-              groups,
-              biplot))
-
+  return(list(groups, biplot))
 }
-
 
